@@ -127,7 +127,19 @@ class DataDict:
 
 
     def importRelationships(self,input_table):
-        print('blah')
+        background_dict={}
+        rel_table = [['SAMPLE_NAME','SAMPLE_SLUG','U_ID','BACKGROUND_NAME','GROUP']]
+        filename=input_table
+        with open(input_table) as f:
+            for line in f:
+                sample.name,sample.slug,sample.id,background.name,group=f.split("\t")
+                background_dict[sample.name]={}
+                background_dict[sample.name]['unique_id']=sample.id #returns unique id
+                background_dict[sample.name]['slug']=sample.slug #returns slug
+                background_dict[sample.name]['background']=background.name #returns background name
+                background_dict[sample.name]['group']=group #returns group
+
+
 
     def setBackground(self,name,background_name):
 
@@ -233,7 +245,8 @@ def main():
     #load the dataDict object
     dataDict = DataDict(collection)
 
-    dataDict.exportRelationships('/home/chazlin/src/foo.txt')
+    dataDict.exportRelationships('/home/rociod/src/foo.txt')
+    dataDict.importRelationships('/home/rociod/src/foo.2.txt')
 
 
     # print(dataDict.names())
