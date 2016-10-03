@@ -31,8 +31,6 @@ THE SOFTWARE.
 import sys
 print "using python version %s" % sys.version
 
-
-
 #================================================================================
 #=============================LOG INTO RESDK=====================================
 #================================================================================
@@ -40,7 +38,6 @@ print "using python version %s" % sys.version
 import resdk
 res = resdk.Resolwe('admin', 'admin', 'https://torta.bcm.genialis.com')
 resdk.start_logging()
-
 
 #================================================================================
 #============================GLOBAL PARAMETERS===================================
@@ -52,13 +49,11 @@ collection_slug = 'primary_chordoma'
 genome = 'hg19'
 projectFolder = '/grail/projects/chordoma/'
 
-
 #================================================================================
 #===========================DEFINING THE CLASSES=================================
 #================================================================================
 
 collection = res.collection.get(collection_slug)
-
 
 #================================================================================
 #===================================CLASSES======================================
@@ -79,9 +74,6 @@ class DataDict:
             d = res.data.get(data_obj)
             if d.process_type.startswith('data:alignment:bam:'):
                 sample = res.sample.filter(data=d.id)[0] #only one bam per id
-                #new_line = '{}\t{}\t{}\t{}\t{}\n'.format(sample.name,sample.slug, sample.id, '', '') 
-                #data_dict[sample.name] = new_line
-                #make sample_dict a nested dictionary
                 sample_dict[sample.name]={}
                 sample_dict[sample.name]['unique_id']=sample.id #returns unique id
                 sample_dict[sample.name]['slug']=sample.slug #returns slug
@@ -156,12 +148,6 @@ class DataDict:
 
 
 
-
-
-
-
-
-
 #================================================================================
 #=================================FUNCTIONS======================================
 #================================================================================
@@ -233,7 +219,7 @@ def main():
     #load the dataDict object
     dataDict = DataDict(collection)
 
-    dataDict.exportRelationships('/home/chazlin/src/foo.txt')
+    dataDict.exportRelationships('/home/rociod/src/foo.txt')
 
 
     # print(dataDict.names())
