@@ -64,7 +64,7 @@ projectFolder = '/grail/projects/chordoma/'
 #===================================CLASSES======================================
 #================================================================================
 
-#user defined classes her
+#user defined classes here
 
 class ResCollection:
 
@@ -208,9 +208,9 @@ class ResCollection:
             return self._background_dict[name]
 
 
-
-
-
+#class locus:
+    #locus class once i get macs going
+#    def __init__():
 
 
 
@@ -252,8 +252,13 @@ def get_bam(sample_name,sample_dict):
         if d.process_type.startswith('data:alignment:bam'):
             return d.id
 
-
-#macs = res.run("macs", inputs=(case=d.id))
+def calculate_macs(case, background):
+    '''
+    given a sample and a background name, calculate macs
+    '''
+    #macs = res.run("macs", inputs=(case = case.id, control = background.id))
+    macs = res.run("macs", inputs=(case = case.id))
+    return macs
 
 #================================================================================
 #===============================MAIN RUN=========================================
@@ -286,6 +291,19 @@ def main():
             print('For dataset %s, the background is %s and the bamID for the background is %s' % (name,background_name,bamID))
         else:
             print('For dataset %s, No background was found' % (name))
+
+    #run all MACS
+    #using the collection list above...
+    for case_name in names_list: 
+        background_name = res_collection.getBackground(name)
+        if background_name:
+            caseID = res_collection.getBamID(case_name)
+            backgroundID = res_collection.getBamID(background_name)
+            macs_result = calculate_macs(case,bamID) #sending funny error of not access permission
+
+        
+
+
 
 main()
 
