@@ -29,6 +29,7 @@ THE SOFTWARE.
 #================================================================================
 
 import sys
+import string
 print "using python version %s" % sys.version
 
 
@@ -69,12 +70,16 @@ projectFolder = '/grail/projects/chordoma/'
 class ResCollection:
 
     #this __init__section is called from the get go
-    def __init__(self,collection_slug,relationship_file=''):
+    def __init__(self,collection_slug,genome,relationship_file=''):
+        
         
         print('Loading collection %s' % (collection_slug))
         collection = res.collection.get(collection_slug)        
         self._collection = collection
 
+        print("Using genome %s" % (genome))
+        self._genome = genome
+        
         sample_dict = {}
         for data_obj in collection.data:
 
@@ -252,14 +257,42 @@ def get_bam(sample_name,sample_dict):
         if d.process_type.startswith('data:alignment:bam'):
             return d.id
 
-def calculate_macs(case, background):
+def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
     '''
     given a sample and a background name, calculate macs
     '''
-    #macs = res.run("macs", inputs=(case = case.id, control = background.id))
-    macs = res.run("macs", inputs=(case = case.id))
-    return macs
+    
+    #in order to run this processor we need the slug, the control, treat, genome, p-value
+    
+    treat_id = res_collection.getBamID(sample_name)
+    if useBackground:
+        background_name = res_collection.getBackground(sample_name)
+        control_id = res_collection.getBamID(background_name)
+        if not background_name:
+            print('ERROR: no background dataset found for %s' % (sample_name))
+            sys.exit()
+            
+    #figuring out genome string
+    genome_string_dict = {'HG19':'hs'}
 
+    genome_string = string.upper(res_collection._genome)
+
+    input_dict = {'t':treat_id,
+                  'g':genome_string,
+                  'pvalue': p_value,
+                  }
+
+    if useBackground:
+        input_dict['c'] = control_id
+    
+    print(input_dict)
+    macs = res.run(slug='macs14',input = input_dict)
+    print(macs)
+    print(macs.id)
+    print(macs.status)
+    res.data.get
+
+    return macs
 #================================================================================
 #===============================MAIN RUN=========================================
 #================================================================================
@@ -277,29 +310,49 @@ def main():
     projectFolder = '/grail/projects/pipeline_resdk/'
     
     #ideal situation
-    res_collection = ResCollection(collection_slug,'%sfoo.txt' % (projectFolder)) #if foo exists, load it, if not write it out to disk
+    res_collection = ResCollection(collection_slug,'hg19','%sCHORDOMA_TABLE.txt' % (projectFolder)) #if foo exists, load it, if not write it out to disk
 
     #all of the datasets that we have
-    #names_list = res_collection.names()
-    
-    #only want k27ac datasets
-    names_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC']
-    for name in names_list:
-        background_name = res_collection.getBackground(name)
-        if background_name:
-            bamID = res_collection.getBamID(background_name)
-            print('For dataset %s, the background is %s and the bamID for the background is %s' % (name,background_name,bamID))
-        else:
-            print('For dataset %s, No background was found' % (name))
+    names_list = res_collection.names()
 
-    #run all MACS
-    #using the collection list above...
-    for case_name in names_list: 
-        background_name = res_collection.getBackground(name)
-        if background_name:
-            caseID = res_collection.getBamID(case_name)
-            backgroundID = res_collection.getBamID(background_name)
-            macs_result = calculate_macs(case,bamID) #sending funny error of not access permission
+    print(names_list)
+
+    print(res_collection._sample_dict)
+
+    print('============================\n\n\n')
+
+    print(res_collection._sample_dict['PRIMARY_CHOR_01192016_H3K27AC'])
+
+    print(res_collection._background_dict['PRIMARY_CHOR_01192016_H3K27AC'])
+
+    print(res_collection._group_dict['PRIMARY_CHOR_01192016_H3K27AC'])
+
+    macs = run_macs14(res_collection,'PRIMARY_CHOR_01192016_H3K27AC',useBackground=True,p_value='1e-9')
+
+
+    print('============================\n\n\n')
+    print(res.data.get(id=macs.id))
+    print(macs.id)
+
+    
+    # #only want k27ac datasets
+    # names_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC']
+    # for name in names_list:
+    #     background_name = res_collection.getBackground(name)
+    #     if background_name:
+    #         bamID = res_collection.getBamID(background_name)
+    #         print('For dataset %s, the background is %s and the bamID for the background is %s' % (name,background_name,bamID))
+    #     else:
+    #         print('For dataset %s, No background was found' % (name))
+
+    # #run all MACS
+    # #using the collection list above...
+    # for case_name in names_list: 
+    #     background_name = res_collection.getBackground(name)
+    #     if background_name:
+    #         caseID = res_collection.getBamID(case_name)
+    #         backgroundID = res_collection.getBamID(background_name)
+    #         macs_result = calculate_macs(case,bamID) #sending funny error of not access permission
 
         
 
