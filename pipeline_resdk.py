@@ -327,13 +327,28 @@ def main():
 
     print(res_collection._group_dict['PRIMARY_CHOR_01192016_H3K27AC'])
 
-    macs = run_macs14(res_collection,'PRIMARY_CHOR_01192016_H3K27AC',useBackground=True,p_value='1e-9')
 
+    ```
+    #this part was modified to reflect Barbara's suggestions
+
+
+    macs = run_macs14(res_collection,'PRIMARY_CHOR_01192016_H3K27AC',useBackground=True,p_value='1e-9')
+    macs.name='foo1'
+    macs.save()
+    from time import sleep
+
+    while True:
+        macs.update()
+        if macs.status=='OK':
+            break
+        sleep(1)
+
+    #####
 
     print('============================\n\n\n')
     print(res.data.get(id=macs.id))
     print(macs.id)
-
+    ```
     
     # #only want k27ac datasets
     # names_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC']
@@ -347,13 +362,8 @@ def main():
 
     # #run all MACS
     # #using the collection list above...
-    # for case_name in names_list: 
-    #     background_name = res_collection.getBackground(name)
-    #     if background_name:
-    #         caseID = res_collection.getBamID(case_name)
-    #         backgroundID = res_collection.getBamID(background_name)
-    #         macs_result = calculate_macs(case,bamID) #sending funny error of not access permission
-
+    # for sample_name in names_list: 
+    #     macs = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
         
 
 
