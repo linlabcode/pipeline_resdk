@@ -285,11 +285,9 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
     if useBackground:
         input_dict['c'] = control_id
     
-    print(input_dict)
     macs = res.run(slug='macs14',input = input_dict)
     print(macs)
-    print(macs.id)
-    print(macs.status)
+    print(macs.status) #this is the one that says RE
     res.data.get
 
     return macs
@@ -315,9 +313,7 @@ def main():
     #all of the datasets that we have
     names_list = res_collection.names()
 
-    print(names_list)
-
-    print(res_collection._sample_dict)
+    import datetime
 
     print('============================\n\n\n')
 
@@ -327,8 +323,9 @@ def main():
 
     print(res_collection._group_dict['PRIMARY_CHOR_01192016_H3K27AC'])
 
+    print ('current run %s', datetime.datetime.now())
 
-    ```
+    print('============================\n\n\n')
     #this part was modified to reflect Barbara's suggestions
 
 
@@ -348,7 +345,7 @@ def main():
     print('============================\n\n\n')
     print(res.data.get(id=macs.id))
     print(macs.id)
-    ```
+
     
     # #only want k27ac datasets
     # names_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC']
