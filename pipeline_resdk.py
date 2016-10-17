@@ -287,7 +287,7 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
     
     macs = res.run(slug='macs14',input = input_dict)
     print(macs)
-    print(macs.status) #this is the one that says RE
+    print(macs.status) #this is the line that says RE, what is that? (rdv)
     res.data.get
 
     return macs
