@@ -30,6 +30,8 @@ THE SOFTWARE.
 
 import sys
 import string
+import time
+ipmort collections
 print "using python version %s" % sys.version
 
 
@@ -77,6 +79,8 @@ class ResCollection:
         collection = res.collection.get(collection_slug)        
         self._collection = collection
 
+        self._id = collection.id
+        self._slug = collection_slug
         print("Using genome %s" % (genome))
         self._genome = genome
         
@@ -131,14 +135,59 @@ class ResCollection:
             except IOError: #nothing present
                 self.exportRelationships(relationship_file)
 
+        #now create a data dictionary to store any analysis outputs
+        self._analysis_dict = {}
+        for name in sample_names:
+            self._analysis_dict[name] = collections.defaultdict(list)
+
+    def check_processor(self,name,slug,input_dict):
+        
+        existing_data_list = self._analysis_dict[name][slug]
+        if len(existing_data_list) == 0:
+            return False #analysis has not been run before w/ these parameters
+
+        for data in existing_data_list:
+            if data.__dict__['input'] == input_dict:
+                #return the data object
+                return data
+
+        return False
+        
+    def add_processor(self,name,slug,data):
+
+        '''
+        loads a processor returned resdk.resource.data.Data object keyed by slug and entered by ID
+        '''
+        self._analysis_dict[name][slug].append(data)
+        
+        
+    def id(self):
+        '''
+        returns the id
+        '''
+        return self._id
+
+    def slug(self):
+        '''
+        returns the slug
+        '''
+        return self._slug
+
+    def update(self):
+        '''
+        re-loads the collection
+        '''
+        self._collection = res.collection.get(self._slug)
+
     def exportRelationships(self,output=''):
         print('Creating relationship table')
-        if len(output) >0:
+
+        if len(output) > 0:
             print('Writing relationships to %s' % (output))
         rel_table = [['SAMPLE_NAME','SAMPLE_SLUG','U_ID','BACKGROUND_NAME','GROUP']]
 
         for name in self._names:            
-            new_line = [name,self._sample_dict[name]['slug'],self._sample_dict[name]['unique_id'],self._background_dict[name],'']
+            new_line = [name,self._sample_dict[name]['slug'],self._sample_dict[name]['unique_id'],self._background_dict[name],self._group_dict[name]]
             rel_table.append(new_line)
 
         if len(output) == 0:
@@ -153,12 +202,10 @@ class ResCollection:
 
     def importRelationships(self,input_table):
         print('Importing relationship data from %s' % (input_table))
-
-        rel_table = [['SAMPLE_NAME','SAMPLE_SLUG','U_ID','BACKGROUND_NAME','GROUP']]
         
         f = open(input_table,'r')
         lines = f.readlines()
-        for line in lines:
+        for line in lines[1:]:
             line = line.rstrip().split('\t')
             name = line[0]
             background = line[3]
@@ -174,9 +221,10 @@ class ResCollection:
         #check that each exist
         if self._names.count(name) == 0:
             print('ERROR: %s not in collection' % (name))
+            sys.exit()
         if self._names.count(background_name) == 0:
-            print('ERROR: %s not in collection' % (background_name))
-
+            print('ERROR: Background name %s not in collection' % (background_name))
+            sys.exit()
         self._background_dict[name] = background_name
 
 
@@ -187,7 +235,7 @@ class ResCollection:
         #check that each exist
         if self._names.count(name) == 0:
             print('ERROR: %s not in collection' % (name))
-
+            sys.exit()
         self._group_dict[name] = group_name
 
     def names(self):
@@ -197,7 +245,6 @@ class ResCollection:
     def group(self,name):
         #returns all sample names
         return self._group_dict[name]
-
 
     def getBamID(self,name):
 
@@ -261,7 +308,7 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
     '''
     given a sample and a background name, calculate macs
     '''
-    
+    macs_slug = 'macs14'
     #in order to run this processor we need the slug, the control, treat, genome, p-value
     
     treat_id = res_collection.getBamID(sample_name)
@@ -284,13 +331,30 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
 
     if useBackground:
         input_dict['c'] = control_id
-    
-    macs = res.run(slug='macs14',input = input_dict)
-    print(macs)
-    print(macs.status) #this is the line that says RE, what is that? (rdv)
-    res.data.get
 
-    return macs
+    #once we establish the input parameters check
+    #if it has already run w/ exact same parameters
+    macs = res_collection.check_processor(sample_name,macs_slug,input_dict):
+    if macs:
+        return res_collection
+    else:
+
+        macs = res.run(slug='macs14',input = input_dict,collections =[res_collection.id()])
+
+        while True:
+            macs.update()
+            if macs.status=='OK' or macs.status=='ER':
+                break
+            if macs.status=='ER':
+                print('oh snap')
+                sys.exit()
+
+            time.sleep(1)     
+   
+        #now put some objects into the res_collection for proper tracking
+        res_collection.add_processor(sample_name,macs_slug,macs)
+    
+        return res_collection
 #================================================================================
 #===============================MAIN RUN=========================================
 #================================================================================
@@ -329,41 +393,10 @@ def main():
     #this part was modified to reflect Barbara's suggestions
 
 
-    macs = run_macs14(res_collection,'PRIMARY_CHOR_01192016_H3K27AC',useBackground=True,p_value='1e-9')
-    macs.name='foo1'
-    macs.save()
-    from time import sleep
-
-    while True:
-        macs.update()
-        if macs.status=='OK':
-            break
-        sleep(1)
-
-    #####
-
-    print('============================\n\n\n')
-    print(res.data.get(id=macs.id))
-    print(macs.id)
-
-    
-    # #only want k27ac datasets
-    # names_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC']
-    # for name in names_list:
-    #     background_name = res_collection.getBackground(name)
-    #     if background_name:
-    #         bamID = res_collection.getBamID(background_name)
-    #         print('For dataset %s, the background is %s and the bamID for the background is %s' % (name,background_name,bamID))
-    #     else:
-    #         print('For dataset %s, No background was found' % (name))
-
-    # #run all MACS
-    # #using the collection list above...
-    # for sample_name in names_list: 
-    #     macs = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
         
 
+if __name__=="__main__":
+    main()
 
 
-main()
 
