@@ -31,7 +31,8 @@ THE SOFTWARE.
 import sys
 import string
 import time
-ipmort collections
+import collections
+import utils
 print "using python version %s" % sys.version
 
 
@@ -304,13 +305,14 @@ def get_bam(sample_name,sample_dict):
         if d.process_type.startswith('data:alignment:bam'):
             return d.id
 
-def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
+def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=''):
     '''
     given a sample and a background name, calculate macs
     '''
-    macs_slug = 'macs14'
+    macs_slug = 'macs14' #macs processor slug
     #in order to run this processor we need the slug, the control, treat, genome, p-value
     
+    #get the treat bam id
     treat_id = res_collection.getBamID(sample_name)
     if useBackground:
         background_name = res_collection.getBackground(sample_name)
@@ -334,7 +336,7 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
 
     #once we establish the input parameters check
     #if it has already run w/ exact same parameters
-    macs = res_collection.check_processor(sample_name,macs_slug,input_dict):
+    macs = res_collection.check_processor(sample_name,macs_slug,input_dict)
     if macs:
         return res_collection
     else:
@@ -343,9 +345,10 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
 
         while True:
             macs.update()
-            if macs.status=='OK' or macs.status=='ER':
+            if macs.status=='OK':
                 break
-            if macs.status=='ER':
+            elif macs.status=='ER':
+                print(macs.stdout())
                 print('oh snap')
                 sys.exit()
 
@@ -353,6 +356,10 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9'):
    
         #now put some objects into the res_collection for proper tracking
         res_collection.add_processor(sample_name,macs_slug,macs)
+        res_collection.update()
+
+        if len(output) > 0:
+            macs.download(download_dir = output)
     
         return res_collection
 #================================================================================
@@ -375,26 +382,23 @@ def main():
     res_collection = ResCollection(collection_slug,'hg19','%sCHORDOMA_TABLE.txt' % (projectFolder)) #if foo exists, load it, if not write it out to disk
 
     #all of the datasets that we have
-    names_list = res_collection.names()
+    h3k27ac_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC')
 
-    import datetime
+    #run macs on everybody w/ background at p of 1e-9 and download to a folder
+    macs_parent_folder = utils.formatFolder('%smacsFolder' % (projectFolder),True)
 
-    print('============================\n\n\n')
+    for sample_name in h3k27ac_list:
 
-    print(res_collection._sample_dict['PRIMARY_CHOR_01192016_H3K27AC'])
-
-    print(res_collection._background_dict['PRIMARY_CHOR_01192016_H3K27AC'])
-
-    print(res_collection._group_dict['PRIMARY_CHOR_01192016_H3K27AC'])
-
-    print ('current run %s', datetime.datetime.now())
-
-    print('============================\n\n\n')
-    #this part was modified to reflect Barbara's suggestions
+        #macs_folder = utils.formatFolder('%s%s_MACS14/' % (macs_parent_folder,sample_name),True)
+        #res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
+        res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
 
 
-        
-
+    #retrieve an arbitrary macs output
+    macs_list = res_collection._analysis_dict[sample_name]['macs14']
+    #filter for a given p-value or presence/absence of a control
+    macs =res_collection._analysis_dict[sample_name]['macs14'][0]
+    #then i could get file paths or object ids necessary to run other stuff
 if __name__=="__main__":
     main()
 
