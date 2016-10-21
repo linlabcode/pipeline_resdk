@@ -322,7 +322,68 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',outp
             sys.exit()
             
     #figuring out genome string
-    genome_string_dict = {'HG19':'hs'}
+    genome_string_dict = {'HG19':'hs'} #probably should make this dictionary bigger
+
+    genome_string = genome_string_dict[string.upper(res_collection._genome)]
+
+    input_dict = {'t':treat_id,
+                  'g':genome_string,
+                  'pvalue': p_value,
+                  }
+
+    if useBackground:
+        input_dict['c'] = control_id
+
+    #once we establish the input parameters check
+    #if it has already run w/ exact same parameters
+    macs = res_collection.check_processor(sample_name,macs_slug,input_dict)
+    if macs:
+        return res_collection
+    else:
+
+        macs = res.run(slug='macs14',input = input_dict,collections =[res_collection.id()])
+
+        while True:
+            macs.update()
+            if macs.status=='OK':
+                break
+            elif macs.status=='ER':
+                print(macs.stdout())
+                print('oh snap')
+                sys.exit()
+
+            time.sleep(1)     
+   
+        #now put some objects into the res_collection for proper tracking
+        res_collection.add_processor(sample_name,macs_slug,macs)
+        res_collection.update()
+
+        if len(output) > 0:
+            macs.download(download_dir = output)
+    
+        return res_collection
+
+def run_rose2(res_collection,sample_name):
+    '''
+    given a sample and a background name, calculate macs
+    '''
+    rose_slug = 'rose2' #rose processor slug
+    #in order to run this processor we need the slug, the macs result (bed file), other stuff
+    #check http://resolwe-bio.readthedocs.io/en/latest/catalog-definitions.html#process-rose2
+
+
+    #still working on this...this is the macs14 template still
+    #get the treat bam id
+    treat_id = res_collection.getBamID(sample_name)
+    if useBackground:
+        background_name = res_collection.getBackground(sample_name)
+        control_id = res_collection.getBamID(background_name)
+        if not background_name:
+            print('ERROR: no background dataset found for %s' % (sample_name))
+            sys.exit()
+            
+    #figuring out genome string
+    #genome_string_dict = {'HG19':'hs'} 
 
     genome_string = string.upper(res_collection._genome)
 
@@ -370,37 +431,42 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',outp
 #write the actual script here
 
 
-def main():
+def test():
 
     '''
-    this is the main run function for the script
+    this is where we are building the main run function for the script
     all of the work should occur here, but no functions should be defined here
+    for now it is not executed allowing a check
     '''
-    projectFolder = '/grail/projects/pipeline_resdk/'
+    #projectFolder = '/grail/projects/pipeline_resdk/'
+    projectFolder = '/grail/projects/pipeline_resdk_2/' #pipeline_resdk needs write permissions
     
     #ideal situation
     res_collection = ResCollection(collection_slug,'hg19','%sCHORDOMA_TABLE.txt' % (projectFolder)) #if foo exists, load it, if not write it out to disk
 
     #all of the datasets that we have
-    h3k27ac_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC')
+    h3k27ac_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC']
 
     #run macs on everybody w/ background at p of 1e-9 and download to a folder
     macs_parent_folder = utils.formatFolder('%smacsFolder' % (projectFolder),True)
 
     for sample_name in h3k27ac_list:
-
         #macs_folder = utils.formatFolder('%s%s_MACS14/' % (macs_parent_folder,sample_name),True)
         #res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
-        res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
+        res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9') #it is sending a weird error
 
 
     #retrieve an arbitrary macs output
-    macs_list = res_collection._analysis_dict[sample_name]['macs14']
+    #macs_list = res_collection._analysis_dict[sample_name]['macs14']
     #filter for a given p-value or presence/absence of a control
-    macs =res_collection._analysis_dict[sample_name]['macs14'][0]
+    #macs =res_collection._analysis_dict[sample_name]['macs14'][0]
     #then i could get file paths or object ids necessary to run other stuff
-if __name__=="__main__":
-    main()
 
+def main():
+    '''
+    this is the main run function for the script
+    all of the work should occur here, but no functions should be defined here
+    '''
 
-
+    if __name__=="__main__":
+        main()
