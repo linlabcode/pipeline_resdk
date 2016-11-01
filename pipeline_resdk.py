@@ -503,7 +503,7 @@ def run_macs14_and_rose2(res_collection,sample_name):
 
     genome_string = string.upper(res_collection._genome)
 
-    input_dict = {'i':macs.output,
+    input_dict = {'i':macs.id,
                   'r':treat_id,
                   'g':genome_string,
                   }
