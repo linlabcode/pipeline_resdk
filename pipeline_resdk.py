@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 '''
 The MIT License (MIT)
@@ -54,8 +54,8 @@ resdk.start_logging()
 #add locations of files and global parameters in this section
 collection_slug = 'primary_chordoma'
 genome = 'hg19'
-projectFolder = '/grail/projects/chordoma/'
-
+projectFolder = '/home/barbara/gen/linlab/data/chordoma/'
+#projectFolder = '/grail/projects/chordoma/'
 
 #================================================================================
 #===========================DEFINING THE CLASSES=================================
@@ -91,7 +91,7 @@ class ResCollection:
             d = res.data.get(data_obj)
             if d.process_type.startswith('data:alignment:bam:'):
                 sample = res.sample.filter(data=d.id)[0] #only one bam per id
-                #new_line = '{}\t{}\t{}\t{}\t{}\n'.format(sample.name,sample.slug, sample.id, '', '') 
+                #new_line = '{}\t{}\t{}\t{}\t{}\n'.format(sample.name,sample.slug, sample.id, '', '')
                 #data_dict[sample.name] = new_line
                 #make sample_dict a nested dictionary
                 sample_dict[sample.name]={}
@@ -108,9 +108,10 @@ class ResCollection:
             for data_obj in sample.data:
                 d = res.data.get(data_obj)
                 if d.process_type.startswith('data:alignment:bam'):
-
                     sample_dict[name]['bam'] = d.id
-                
+                elif d.process_type.startswith('data:chipseq:macs14:'):
+                    sample_dict[name]['bed'] = d.id
+
         self._sample_dict = sample_dict
 
 
@@ -142,7 +143,7 @@ class ResCollection:
             self._analysis_dict[name] = collections.defaultdict(list)
 
     def check_processor(self,name,slug,input_dict):
-        
+
         existing_data_list = self._analysis_dict[name][slug]
         if len(existing_data_list) == 0:
             return False #analysis has not been run before w/ these parameters
@@ -153,15 +154,15 @@ class ResCollection:
                 return data
 
         return False
-        
+
     def add_processor(self,name,slug,data):
 
         '''
         loads a processor returned resdk.resource.data.Data object keyed by slug and entered by ID
         '''
         self._analysis_dict[name][slug].append(data)
-        
-        
+
+
     def id(self):
         '''
         returns the id
@@ -251,6 +252,9 @@ class ResCollection:
 
         return self._sample_dict[name]['bam']
 
+    def getBedID(self,name):
+        return self._sample_dict[name]['bed']
+
 
     def getBackground(self,name):
         #return the sample name of the background!!!
@@ -305,14 +309,24 @@ def get_bam(sample_name,sample_dict):
         if d.process_type.startswith('data:alignment:bam'):
             return d.id
 
+def get_bed(sample_name,sample_dict):
+
+     '''
+     from the sample dict given the sample name, return the aligned bam data object
+     '''
+     sample=res.sample.get(sample_dict[sample_name]['slug'])
+     for data_obj in sample.data:
+         d = res.data.get(data_obj)
+         if d.process_type.startswith('data:chipseq:macs14:'):
+             return d.id
+
 def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=''):
     '''
     given a sample and a background name, calculate macs
     '''
     macs_slug = 'macs14' #macs processor slug
     #in order to run this processor we need the slug, the control, treat, genome, p-value
-    #http://resolwe-bio.readthedocs.io/en/latest/catalog-definitions.html#process-macs14
-
+    
     #get the treat bam id
     treat_id = res_collection.getBamID(sample_name)
     if useBackground:
@@ -342,7 +356,7 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',outp
         return res_collection
     else:
 
-        macs = res.run(slug='macs14',input = input_dict,collections =[res_collection.id()]) #it runs macs and edits back to the collection
+        macs = res.run(slug='macs14',input = input_dict,collections =[res_collection.id()])
 
         while True:
             macs.update()
@@ -351,195 +365,86 @@ def run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',outp
             elif macs.status=='ER':
                 print(macs.stdout())
                 print('oh snap')
-                sys.exit()
-
-            time.sleep(1)     
-   
-        #now put some objects into the res_collection for proper tracking, giving back to the table
-        res_collection.add_processor(sample_name,macs_slug,macs)
-        res_collection.update()
-
-        if len(output) > 0:
-            macs.download(download_dir = output)
-    
-        return res_collection
-
-def get_macs(sample_name,sample_dict):
-    '''
-    from the sample dict given the sample name, return the macs result data object
-    '''
-    sample=res.sample.get(sample_dict[sample_name]['macs14'])
-    for data_obj in sample.data:
-        d = res.data.get(data_obj)
-        if d.process_type.startswith('data:chipseq:macs14'):
-            return d.id
-
-def run_rose2(res_collection,sample_name,macs,useBackground=True,output=''):
-    '''
-    NOT WORKING
-    given a sample, a background name, and a macs result, calculate rose
-    '''
-    rose_slug = 'rose2' #rose2 processor slug
-    #in order to run this processor we need the slug, the macs result (bed file), the treatment and control bams
-
-    #get the treat bam id
-    treat_id = res_collection.getBamID(sample_name)
-    if useBackground:
-        background_name = res_collection.getBackground(sample_name)
-        control_id = res_collection.getBamID(background_name)
-        if not background_name:
-            print('ERROR: no background dataset found for %s' % (sample_name))
-            sys.exit()
-            
-    macs_result='' #can't figure out how to call the macs result
-    genome_string = string.upper(res_collection._genome)
-
-    input_dict = {'i':macs_result, 
-                  'r':treat_id,
-                  'g':genome_string,
-                  }
-
-    if useBackground:
-        input_dict['c'] = control_id
-
-    rose = res_collection.check_processor(sample_name,rose_slug,input_dict)
-    if rose:
-        return res_collection
-    else:
-
-        rose = res.run(slug='rose2',input = input_dict,collections =[res_collection.id()])
-
-        while True:
-            rose2.update()
-            if rose.status=='OK':
-                break
-            elif rose.status=='ER':
-                print(rose.stdout())
-                print('Error in ROSE2')
                 sys.exit()
 
             time.sleep(1)     
    
         #now put some objects into the res_collection for proper tracking
-        res_collection.add_processor(sample_name,rose_slug,rose)
-        res_collection.update()
-
-        if len(output) > 0:
-            rose.download(download_dir = output)
-    
-        return res_collection
-
-#================================================================================
-#====================BAD ROUTINE DELETE WHEN SDK IS MODIFIED=====================
-#================================================================================
-
-
-def run_macs14_and_rose2(res_collection,sample_name):
-    '''
-    given a sample and a background name, calculate macs and rose2
-    current resdk doesn't support running all the macs before rose2
-    '''
-
-    macs_slug = 'macs14' #macs processor slug
-    #in order to run this processor we need the slug, the control, treat, genome, p-value
-    #http://resolwe-bio.readthedocs.io/en/latest/catalog-definitions.html#process-macs14
-
-    #get the treat bam id
-    treat_id = res_collection.getBamID(sample_name)
-    if useBackground:
-        background_name = res_collection.getBackground(sample_name)
-        control_id = res_collection.getBamID(background_name)
-        if not background_name:
-            print('ERROR: no background dataset found for %s' % (sample_name))
-            sys.exit()
-            
-    #figuring out genome string
-    genome_string_dict = {'HG19':'hs'} #probably should make this dictionary bigger
-
-    genome_string = genome_string_dict[string.upper(res_collection._genome)]
-
-    input_dict = {'t':treat_id,
-                  'g':genome_string,
-                  'pvalue': p_value,
-                  }
-
-    if useBackground:
-        input_dict['c'] = control_id
-
-    #once we establish the input parameters check
-    #if it has already run w/ exact same parameters
-    macs = res_collection.check_processor(sample_name,macs_slug,input_dict)
-    if macs:
-        return res_collection
-    else:
-
-        macs = res.run(slug='macs14',input = input_dict,collections =[res_collection.id()]) #it runs macs and edits back to the collection
-
-        while True:
-            macs.update()
-            if macs.status=='OK':
-                break
-            elif macs.status=='ER':
-                print(macs.stdout())
-                print('oh snap')
-                sys.exit()
-
-            time.sleep(1)     
-   
-        #now put some objects into the res_collection for proper tracking, giving back to the table
         res_collection.add_processor(sample_name,macs_slug,macs)
         res_collection.update()
 
+        res_collection._sample_dict[sample_name]['bed'] = macs.id
+
         if len(output) > 0:
             macs.download(download_dir = output)
-    
-    rose_slug = 'rose2' #rose processor slug
-    #in order to run this processor we need the slug, the macs result (bed file), the treatment and control bams
-    #not optimal at this point cause macs14 and rose2 have to be on the same process
+
+        return res_collection
+
+def run_rose2(res_collection,sample_name, t=0):
+    '''
+    given a sample and a background name, calculate macs
+    '''
+    rose2_slug = 'rose2' #rose processor slug
+    #in order to run this processor we need the slug, the macs result (bed file), other stuff
     #check http://resolwe-bio.readthedocs.io/en/latest/catalog-definitions.html#process-rose2
 
     #figuring out genome string
-    #genome_string_dict = {'HG19':'hs'} 
+    genome_string_dict = {'HG19':'hs'} #probably should make this dictionary bigger
+
+    #get the treat bam id
+    treat_id = res_collection.getBamID(sample_name)
+    if useBackground:
+        background_name = res_collection.getBackground(sample_name)
+        control_id = res_collection.getBamID(background_name)
+        if not background_name:
+            print('ERROR: no background dataset found for %s' % (sample_name))
+            sys.exit()
+
+    macs_bed = res_collection.getBedID(sample_name)
+
+    #figuring out genome string
+    #genome_string_dict = {'HG19':'hs'}
 
     genome_string = string.upper(res_collection._genome)
 
-    input_dict = {'i':macs.id,
-                  'r':treat_id,
-                  'g':genome_string,
-                  }
+    res_collection.getBedID(sample_name)
+
+    inputs_rose2 = {
+        'g': genome_string,
+        'i': macs_bed.id,
+        'r': treat_id.id,
+        't': t}
 
     if useBackground:
         input_dict['c'] = control_id
 
-    rose = res_collection.check_processor(sample_name,rose_slug,input_dict)
-    if rose:
+    #once we establish the input parameters check
+    #if it has already run w/ exact same parameters
+    rose2 = res_collection.check_processor(sample_name, rose2_slug, inputs_rose2)
+    if rose2:
         return res_collection
     else:
-
-        rose = res.run(slug='rose2',input = input_dict,collections =[res_collection.id()])
+        rose2 = res.run(slug='rose2',input = input_rose2,collections =[res_collection.id()])
 
         while True:
             rose2.update()
-            if rose.status=='OK':
+            if rose2.status=='OK':
                 break
-            elif rose.status=='ER':
-                print(rose.stdout())
-                print('Error in ROSE2')
+            elif rose2.status=='ER':
+                print(rose2.stdout())
+                print('oh snap')
                 sys.exit()
 
-            time.sleep(1)     
-   
+            time.sleep(1)
+
         #now put some objects into the res_collection for proper tracking
-        res_collection.add_processor(sample_name,rose_slug,rose)
+        res_collection.add_processor(sample_name,rose2_slug,rose2)
         res_collection.update()
 
         if len(output) > 0:
-            rose.download(download_dir = output)
-    
+            rose2.download(download_dir = output)
+
         return res_collection
-
-
-
 #================================================================================
 #===============================MAIN RUN=========================================
 #================================================================================
@@ -548,15 +453,16 @@ def run_macs14_and_rose2(res_collection,sample_name):
 #write the actual script here
 
 
-def test():
+def main():
+
 
     '''
     this is where we are building the main run function for the script
     all of the work should occur here, but no functions should be defined here
     for now it is not executed allowing a check
     '''
-    #projectFolder = '/grail/projects/pipeline_resdk/'
-    projectFolder = '/grail/projects/pipeline_resdk_2/' #pipeline_resdk needs write permissions
+    #projectFolder = '/grail/projects/pipeline_resdk_2/'
+    projectFolder = '/home/barbara/gen/linlab/data/pipeline_resdk/' #pipeline_resdk needs write permissions
     
     #ideal situation
     res_collection = ResCollection(collection_slug,'hg19','%sCHORDOMA_TABLE.txt' % (projectFolder)) #if foo exists, load it, if not write it out to disk
@@ -567,34 +473,21 @@ def test():
     #run macs on everybody w/ background at p of 1e-9 and download to a folder
     macs_parent_folder = utils.formatFolder('%smacsFolder' % (projectFolder),True)
 
-    
-    #for sample_name in h3k27ac_list:
+    for sample_name in h3k27ac_list:
         #macs_folder = utils.formatFolder('%s%s_MACS14/' % (macs_parent_folder,sample_name),True)
         #res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
+        res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
 
-    sample_name = h3k27ac_list[1]
-    macs_folder = utils.formatFolder('%s%s_MACS14/' % (macs_parent_folder,sample_name),True)
-    res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
+    for sample_name in h3k27ac_list:
+        res_collection = run_rose2(res_collection,sample_name,useBackground=True, t=0)
+
 
     #retrieve an arbitrary macs output
-    macs_list = res_collection._analysis_dict[sample_name]['macs14'] #not sure this is working
+    #macs_list = res_collection._analysis_dict[sample_name]['macs14']
     #filter for a given p-value or presence/absence of a control
-    macs =res_collection._analysis_dict[sample_name]['macs14'][0]
+    #macs =res_collection._analysis_dict[sample_name]['macs14'][0]
     #then i could get file paths or object ids necessary to run other stuff
 
-    #for sample_name in h3k27ac_list:
-        #rose_folder = utils.formatFolder('%s%s_ROSE2/' % (macs_parent_folder,sample_name),True)
-        #res_collection = run_rose2(res_collection,sample_name,useBackground=True,macs,output=rose_folder)
 
-    rose_parent_folder = utils.formatFolder('%sroseFolder' % (projectFolder),True)
-    rose_folder = utils.formatFolder('%s%s_ROSE2/' % (rose_parent_folder,sample_name),True)
-    res_collection = run_rose2(res_collection,sample_name,macs,useBackground=True,output=rose_folder)
-
-def main():
-    '''
-    this is the main run function for the script
-    all of the work should occur here, but no functions should be defined here
-    '''
-
-    if __name__=="__main__":
+if __name__=="__main__":
         main()
