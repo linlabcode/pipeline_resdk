@@ -339,7 +339,7 @@ def run_macs14(res_collection, sample_name, useBackground=True, p_value='1e-9', 
 
 # in rose2 we add macs processor and we add  function get_or_run, and if the data object already exist then it take it otherwise it run macs2 with defined parameters.
 
-def run_rose2(res_collection,sample_name, useBackground=True, t=0, output='', macs_params={}):
+def run_rose2(res_collection,sample_name, useBackground=True, t=0, output='', s='', macs_params={}):
     '''
     given a sample and a background name, calculate macs
     '''
@@ -369,7 +369,8 @@ def run_rose2(res_collection,sample_name, useBackground=True, t=0, output='', ma
         'g': genome_string,
         'i': macs_bed,
         'r': treat_id,
-        't': t
+        't': t,
+        's': s,
     }
 
     if useBackground:
@@ -439,7 +440,7 @@ def main():
         res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
 
     for sample_name in h3k27ac_list:
-        res_collection = run_rose2(res_collection,sample_name,useBackground=True, t=0, macs_params={'p_value': '1e-9'})
+        res_collection = run_rose2(res_collection,sample_name,useBackground=True, t=0, s='', macs_params={'p_value': '1e-9'})
 
 
     #retrieve an arbitrary macs output
