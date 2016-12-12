@@ -1,33 +1,147 @@
+# ========
+# Bamplot
+# ========
+---
+
 - slug: bamplot
   name: bamplot
-  data_name: bamPlot #name of a data object that this process will create!
-  version: 1.0.0
+  data_name: bamPlot
+  version: 0.0.1
   category: plotting
-  type: data:bamplot #types where can I get a list of types? #this is the type of the data_name object?
-  description: plotting a single locus from a bam
+  type: data:bam:plot
+  description: >
+    Plotting a single locus from a bam.
   input:
     - name: g
-      label: genome
+      label: Genome
       type: basic:string
       choices:
         - label: HG19
           value: HG19
+        - label: HG18
+          value: HG18
+        - label: MM8
+          value: MM8
+        - label: MM9
+          value: MM9
+        - label: MM10
+          value: MM10
     - name: i
-      label: region string
+      label: Region string
       type: basic:string
       required: true
+      description: >
+         Enter .gff or genomic region e.g. chr1:+:1-1000.
     - name: b
-      label: bam
+      label: Bam
       type: data:alignment:bam
       required: true
-      description: bam to plot from
+      description: >
+        bam to plot from
+    - name: stretch-input
+      label: Stretch-input
+      type: basic:integer
+      description: >
+        Stretch the input regions to a minimum length in bp, e.g. 10000 (for 10kb).
+    - name: c
+      label: Color
+      type: basic:integer
+      description: >
+        Enter a colon separated list of colors e.g. 255,0,0:255,125,0, default samples the rainbow.
+    - name: s
+      label: Sense
+      type: basic:string
+      default: both
+      choices:
+        - label: +
+          value: +
+        - label: -
+          value: -
+      description: >
+       Map to '+','-' or 'both' strands. Default maps to both.
+    - name: e
+      label: Extension
+      type: basic:integer
+      default: 200
+      description: >
+        Extends reads by n bp. Default value is 200bp.
+    - name: r
+      label: rpm
+      type: basic:boolean
+      default: False
+      description: >
+        Normalizes density to reads per million (rpm) Default is False.
+    - name: y
+      label: y scale
+      type: basic:string
+      default: relative
+      choices:
+        - label: relative
+          value: relative
+        - label: uniform
+          value: uniform
+      description: >
+        Choose either relative or uniform y axis scaling. Default is relative scaling.
+    - name: n
+      label: Names
+      type: basic:list
+      description: >
+        Enter a comma separated list of names for your bams.
+    - name:p
+      label: plot
+      type: basic:string
+      choices:
+        - label: single
+          value: single
+        - label: multiple
+          value: multiple
+        - label: merge
+          value: merge
+      description: >
+        Choose either all lines on a single plot or multiple plots.
+    - name: t
+      label: Title
+      type: basic:string
+      description: >
+        Specify a title for the output plot(s), default will be the coordinate region.
+    - name: scale
+      label: Scale
+      type: basic:integer
+      description: >
+        Enter a comma separated list of multiplicative scaling factors for your bams. Default is none.
+    - name: save-temp
+      label: Save temporary files
+      type: basic:boolean
+      description: >
+        If flagged will save temporary files made by bamPlot.
+    - name: bed
+      label: Bed
+      type: basic:list
+      description: >
+        Add a space-delimited list of bed files to plot.
+    - name: multi-page
+      label: Multi page
+      type: basic:boolean
+      description: >
+       If flagged will create a new pdf for each region.
+    - name: verbose
+      label: Verbose
+      type: basic:boolean
+      description: >
+       If verbose will print additional output.
   output:
     - name: plot
       label: region plot
       type: basic:file
+    - name: additional_output
+      label: Additional output
+      type: basic:file
   run:
     runtime: polyglot
     bash: |
-      bamplot -g {{g}} -i {{i}} -b {{b.bam.file}} -o . -t OUTPUT
-      re-checkrc "bamplot failed."	 
+      bamplot -g {{g}} -i {{i}} -b {{b.bam.file}}
+      re-checkrc "bamplot failed."
       re-save-file plot OUTPUT_plots.pdf
+
+
+-i {% if i_upload %} {{i_upload.BED.file}}
