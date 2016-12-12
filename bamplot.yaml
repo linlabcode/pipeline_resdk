@@ -1,0 +1,33 @@
+- slug: bamplot
+  name: bamplot
+  data_name: bamPlot #name of a data object that this process will create!
+  version: 1.0.0
+  category: plotting
+  type: data:bamplot #types where can I get a list of types? #this is the type of the data_name object?
+  description: plotting a single locus from a bam
+  input:
+    - name: g
+      label: genome
+      type: basic:string
+      choices:
+        - label: HG19
+          value: HG19
+    - name: i
+      label: region string
+      type: basic:string
+      required: true
+    - name: b
+      label: bam
+      type: data:alignment:bam
+      required: true
+      description: bam to plot from
+  output:
+    - name: plot
+      label: region plot
+      type: basic:file
+  run:
+    runtime: polyglot
+    bash: |
+      bamplot -g {{g}} -i {{i}} -b {{b.bam.file}} -o . -t OUTPUT
+      re-checkrc "bamplot failed."	 
+      re-save-file plot OUTPUT_plots.pdf
