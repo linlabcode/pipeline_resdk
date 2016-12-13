@@ -26,12 +26,18 @@
           value: MM9
         - label: MM10
           value: MM10
-    - name: i
+    - name: i_gff
       label: Region string
       type: basic:string
-      required: true
+      required: false
       description: >
-         Enter .gff or genomic region e.g. chr1:+:1-1000.
+        Enter .gff file.
+    - name: i_region
+      label: Region string
+      type: basic:string
+      required: false
+      description: >
+        Enter genomic region e.g. chr1:+:1-1000.
     - name: b
       label: Bam
       type: data:alignment:bam
@@ -136,12 +142,24 @@
     - name: additional_output
       label: Additional output
       type: basic:file
-  run:
+      {% if i_gff and not i_region %}      
+    run:
     runtime: polyglot
     bash: |
-      bamplot -g {{g}} -i {{i}} -b {{b.bam.file}}
+      bamplot -g {{g}} -i {{i_gff}} -b {{b.bam.file}}
       re-checkrc "bamplot failed."
       re-save-file plot OUTPUT_plots.pdf
-
-
+      {% endif %}
+      {% if not i_gff and i_region %}      
+    run:
+    runtime: polyglot
+    bash: |
+      bamplot -g {{g}} -i {{i_region}} -b {{b.bam.file}}
+      re-checkrc "bamplot failed."
+      re-save-file plot OUTPUT_plots.pdf
+      {% endif %}
+      {% if i_gff and i_region %}
+        re-error "There are two coordinate entries, please provide either a gff or a genomic file location only."
+      {% endif %}
+      
 -i {% if i_upload %} {{i_upload.BED.file}}
