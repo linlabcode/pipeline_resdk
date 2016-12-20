@@ -3,7 +3,7 @@
 '''
 The MIT License (MIT)
 
-Copyright (c) 2016 Charles Y. Lin, Rocio Dominguez-Vidana
+Copyright (c) 2016 Charles Y. Lin, Rocio Dominguez-Vidana, Barbara Jenko
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -230,6 +230,56 @@ class ResCollection:
         else:
             return self._background_dict[name]
 
+    def run_macs14(self, sample_name, useBackground=True, p_value='1e-9', output=''):
+        '''
+        given a sample and a background name, calculate macs
+        '''
+        macs_slug = 'macs14' #macs processor slug
+        #in order to run this processor we need the slug, the control, treat, genome, p-value
+
+        #get the treat bam id
+        treat_id = self.getBamID(sample_name)
+
+        #figuring out genome string
+        genome_string_dict = {'HG19':'hs'} #probably should make this dictionary bigger
+
+        genome_string = genome_string_dict[string.upper(self._genome)]
+
+        input_dict = {'t':treat_id,
+                      'g':genome_string,
+                      'pvalue': p_value,
+                      }
+
+        if useBackground:
+            background_name = self.getBackground(sample_name)
+            if background_name:
+                control_id = self.getBamID(background_name)
+                input_dict['c'] = control_id
+            else:
+                print('WARNING: no background dataset found for %s' % (sample_name))
+                print('INFO: macs will be run without control')
+
+        macs = res.get_or_run(slug='macs14', input = input_dict)
+        print("Calculating macs...")
+
+        while True:
+            macs.update()
+            if macs.status=='OK':
+                break
+            elif macs.status=='ER':
+                print(macs.stdout())
+                print('oh snap')
+                sys.exit()
+
+            time.sleep(1)
+            # print('Still working ;)')
+
+        self._sample_dict[sample_name]['macs14'] = macs.id
+
+        if len(output) > 0:
+            macs.download(download_dir = output)
+
+        return macs
 
 #class locus:
     #locus class once i get macs going
@@ -281,60 +331,6 @@ def get_bed(sample_name,sample_dict):
      for d in sample.data.filter(type='data:chipseq:macs14:'):
         return d.id
 
-def run_macs14(res_collection, sample_name, useBackground=True, p_value='1e-9', output=''):
-    '''
-    given a sample and a background name, calculate macs
-    '''
-    macs_slug = 'macs14' #macs processor slug
-    #in order to run this processor we need the slug, the control, treat, genome, p-value
-
-    #get the treat bam id
-    treat_id = res_collection.getBamID(sample_name)
-
-    #figuring out genome string
-    genome_string_dict = {'HG19':'hs'} #probably should make this dictionary bigger
-
-    genome_string = genome_string_dict[string.upper(res_collection._genome)]
-
-    input_dict = {'t':treat_id,
-                  'g':genome_string,
-                  'pvalue': p_value,
-                  }
-
-    if useBackground:
-        background_name = res_collection.getBackground(sample_name)
-        if background_name:
-            control_id = res_collection.getBamID(background_name)
-            input_dict['c'] = control_id
-        else:
-            print('WARNING: no background dataset found for %s' % (sample_name))
-            print('INFO: macs will be run without control')
-
-    # Macs is automatically added to all collections that sample is in,
-    # so we don't need to define collection
-    # get_or_run function, checks if macs processor with this inputs has already run
-    # if not it runs it otherwise it took the data object
-    macs = res.get_or_run(slug='macs14', input = input_dict)
-    print("Calculating macs...")
-
-    while True:
-        macs.update()
-        if macs.status=='OK':
-            break
-        elif macs.status=='ER':
-            print(macs.stdout())
-            print('oh snap')
-            sys.exit()
-
-        time.sleep(1)
-        # print('Still working ;)')
-
-    res_collection._sample_dict[sample_name]['bed'] = macs.id
-
-    if len(output) > 0:
-        macs.download(download_dir = output)
-
-    return res_collection
 
 
 # in rose2 we add macs processor and we add  function get_or_run, and if the data object already exist then it take it otherwise it run macs2 with defined parameters.
@@ -426,21 +422,46 @@ def main():
     # ideal situation
     res_collection = ResCollection(collection_slug,'hg19','%sCHORDOMA_TABLE.txt' % (projectFolder)) #if foo exists, load it, if not write it out to disk
 
-    # all of the datasets that we have
+    # all of the datasets that we have from the k27ac group
     h3k27ac_list = [name for name in res_collection.names() if res_collection.group(name) == 'H3K27AC']
+
+    #=======================
+    #schema for how we want to run, record and get back data for any processor
+    sample_name = h3k27ac_list[0]
+    print(sample_name)
+    #test macs on this and make sure the collection sample dict is appropriately updated
+    #this makes sure you can return the macs data id when you run it
+    #also want to make sure that the collection gets updated appropriately
+    macs = res_collection.run_macs14(sample_name,useBackground=True,p_value='1e-9')
+
+    print(macs.id)
+    print(res_collection._sample_dict[sample_name])
+
+    #now we should be able to retrieve the macs output easily by doing
+    macs_id = res_collection._sample_dict[sample_name]['macs14']
+    macs_copy = res.data.get(macs_id)
+    print(macs_copy.id)
+    print(macs_copy.files())
+
+    #========================
     # if we want to run only for one sample
     # h3k27ac_list = h3k27ac_list[:1]
 
-    #run macs on everybody w/ background at p of 1e-9 and download to a folder
-    macs_parent_folder = utils.formatFolder('%smacsFolder' % (projectFolder),True)
+    # #run macs on everybody w/ background at p of 1e-9 and download to a folder
+    # macs_parent_folder = utils.formatFolder('%smacsFolder' % (projectFolder),True)
 
-    for sample_name in h3k27ac_list:
-        #macs_folder = utils.formatFolder('%s%s_MACS14/' % (macs_parent_folder,sample_name),True)
-        #res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
-        res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
+    # for sample_name in h3k27ac_list:
+    #     #macs_folder = utils.formatFolder('%s%s_MACS14/' % (macs_parent_folder,sample_name),True)
+    #     #res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
+    #     res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
 
+<<<<<<< HEAD
+    # for sample_name in h3k27ac_list:
+    #     res_collection = run_rose2(res_collection,sample_name,useBackground=True, t=0, macs_params={'p_value': '1e-9'})
+=======
     for sample_name in h3k27ac_list:
         res_collection = run_rose2(res_collection,sample_name,useBackground=True, t=0, s='', macs_params={'p_value': '1e-9'})
+>>>>>>> 4e845d44d7705631905c0f98e1581d71c2d9bfb8
 
 
     #retrieve an arbitrary macs output
