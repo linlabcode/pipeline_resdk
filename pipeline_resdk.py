@@ -400,6 +400,87 @@ def run_rose2(res_collection,sample_name, useBackground=True, t=0, output='', s=
         rose2.download(download_dir=output)
 
     return res_collection
+
+
+def bamplot(res_collection, g='', gff_path=None, gff_source=None, i_region=None, b=[], stretch_input=None, c=None,
+            s=None, e=None, r=None, y=None, n=None, p=None, t=None, scale=None, bed=None,
+            multi_page=None, verbose=None, output=''):
+
+    bam_ids = []
+
+    for bam_path in b:
+        bam = res.run('bam-upload', input={'src': bam_path})
+        bam_ids.append(bam.id)
+
+    genome_string = string.upper(res_collection._genome)
+
+
+    input_bamplot = {
+        'g': genome_string,
+        'b': bam_ids,
+    }
+
+    if c is not None:
+        input_bamplot['c'] = c
+
+    if s is not None:
+        input_bamplot['s'] = s
+
+    if e is not None:
+        input_bamplot['e'] = e
+
+    if r is not None:
+        input_bamplot['r'] = r
+
+    if y is not None:
+        input_bamplot['y'] = y
+
+    if n is not None:
+        input_bamplot['n'] = n
+
+    if p is not None:
+        input_bamplot['p'] = p
+
+    if t is not None:
+        input_bamplot['t'] = t
+
+    if scale is not None:
+        input_bamplot['scale'] = scale
+
+    if multi_page is not None:
+        input_bamplot['multi_page'] = multi_page
+
+    if verbosee is not None:
+        input_bamplot['verbose'] = verbose
+
+    if gff_path is not None:
+        i_gff = res.run('upload-gff3', input={'src':gff_path, 'source':gff_source})
+        input_bamplot['i_gff'] = i_gff
+
+    if i_region is not None:
+        input_bamplot['i_region'] = i_region
+
+    if bed is not None:
+        input_bamplot['bed'] = bed
+
+    bamplot = res.get_or_run(slug='bamplot', input=input_bamplot)
+    print("Running bamplot...")
+
+    while True:
+        bamplot.update()
+        if bamplot.status=='OK':
+            break
+        elif bamplot.status=='ER':
+            print(bamplot.stdout())
+            print('oh snap')
+            sys.exit()
+
+        time.sleep(1)
+
+    if len(output) > 0:
+        bamplot.download(download_dir=output)
+
+    return res_collection
 #================================================================================
 #===============================MAIN RUN=========================================
 #================================================================================
@@ -455,13 +536,8 @@ def main():
     #     #res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
     #     res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
 
-<<<<<<< HEAD
-    # for sample_name in h3k27ac_list:
-    #     res_collection = run_rose2(res_collection,sample_name,useBackground=True, t=0, macs_params={'p_value': '1e-9'})
-=======
     for sample_name in h3k27ac_list:
         res_collection = run_rose2(res_collection,sample_name,useBackground=True, t=0, s='', macs_params={'p_value': '1e-9'})
->>>>>>> 4e845d44d7705631905c0f98e1581d71c2d9bfb8
 
 
     #retrieve an arbitrary macs output
