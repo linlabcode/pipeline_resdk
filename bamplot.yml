@@ -5,10 +5,13 @@
 
 - slug: bamplot
   name: bamplot
-  data_name: bamPlot
+  requirements:
+    expression-engine: jinja
+  data_name: "{{ alignments.bam.file|basename|default('?') }}"
   version: 0.0.1
-  category: plotting
   type: data:bam:plot
+  category: plotting
+  persistence: CACHED
   description: >
     Plotting a single locus from a bam.
   input:
@@ -28,43 +31,47 @@
           value: MM10
     - name: i_gff
       label: Region string
-      type: basic:string
+      type: basic:file
       required: false
       description: >
-        Enter .gff file.
+         Enter .gff file.
     - name: i_region
       label: Region string
       type: basic:string
       required: false
       description: >
-        Enter genomic region e.g. chr1:+:1-1000.
+         Enter genomic region e.g. chr1:+:1-1000.
     - name: b
       label: Bam
       type: data:alignment:bam
-      required: true
+      required: false
       description: >
         bam to plot from
-    - name: stretch-input
+    - name: stretch_input
       label: Stretch-input
+      required: false
       type: basic:integer
       description: >
         Stretch the input regions to a minimum length in bp, e.g. 10000 (for 10kb).
     - name: c
       label: Color
-      type: basic:integer
+      type: basic:string
+      default: '255,0,0:255,125,0'
       description: >
-        Enter a colon separated list of colors e.g. 255,0,0:255,125,0, default samples the rainbow.
+       Enter a colon separated list of colors e.g. 255,0,0:255,125,0, default samples the rainbow.
     - name: s
       label: Sense
       type: basic:string
       default: both
       choices:
-        - label: +
-          value: +
-        - label: -
-          value: -
+        - label: Forward
+          value: forward
+        - label: Reverse
+          value: reverse
+        - label: Both
+          value: both
       description: >
-       Map to '+','-' or 'both' strands. Default maps to both.
+       Map to forward, reverse or'both strands. Default maps to both.
     - name: e
       label: Extension
       type: basic:integer
@@ -74,7 +81,7 @@
     - name: r
       label: rpm
       type: basic:boolean
-      default: False
+      required: false
       description: >
         Normalizes density to reads per million (rpm) Default is False.
     - name: y
@@ -90,12 +97,14 @@
         Choose either relative or uniform y axis scaling. Default is relative scaling.
     - name: n
       label: Names
-      type: basic:list
+      type: basic:string
+      required: false
       description: >
         Enter a comma separated list of names for your bams.
-    - name:p
-      label: plot
+    - name: p
+      label: Single or multiple polt
       type: basic:string
+      default: merge
       choices:
         - label: single
           value: single
@@ -108,58 +117,78 @@
     - name: t
       label: Title
       type: basic:string
+      default: output
       description: >
         Specify a title for the output plot(s), default will be the coordinate region.
     - name: scale
       label: Scale
-      type: basic:integer
+      type: basic:string
+      required: false
       description: >
         Enter a comma separated list of multiplicative scaling factors for your bams. Default is none.
-    - name: save-temp
-      label: Save temporary files
-      type: basic:boolean
-      description: >
-        If flagged will save temporary files made by bamPlot.
     - name: bed
       label: Bed
-      type: basic:list
+      type: basic:string
+      required: false
       description: >
         Add a space-delimited list of bed files to plot.
-    - name: multi-page
+    - name: multi_page
       label: Multi page
       type: basic:boolean
+      default: false
       description: >
-       If flagged will create a new pdf for each region.
+        If flagged will create a new pdf for each region.
     - name: verbose
       label: Verbose
       type: basic:boolean
+      default: false
       description: >
        If verbose will print additional output.
   output:
     - name: plot
       label: region plot
       type: basic:file
-    - name: additional_output
-      label: Additional output
-      type: basic:file
-      {% if i_gff and not i_region %}      
-    run:
+
+  run:
     runtime: polyglot
-    bash: |
-      bamplot -g {{g}} -i {{i_gff}} -b {{b.bam.file}}
-      re-checkrc "bamplot failed."
-      re-save-file plot OUTPUT_plots.pdf
+    language: bash
+    program: |
+
+      mkdir output_plot
+
+      {% if i_region %}
+        bamplot -g {{g}} -i {{i_region}} -b {{b.bam.file}}  -c {{c}} -e {{e}} -s {{s}} -y {{y}} {% if r %}-r{% endif %} {% if n %}-n {{n}}{% endif %} -p {{p}} {% if scale %}-scale {{scale}}{% endif %} {% if bed %}--bed {{bed}}{% endif %} {% if stretch_input %}--stretch-input {{stretch_input}}{% endif %} {% if multi_page %}--multi-page{% endif %} {% if verbose %}--verbose{% endif %} -o output_plot -t {{t}}
+
+        re-checkrc "bamplot failed."
+
+
+        {% if multi_page %}
+          mv output_plot/{{t}}_plots_NA.pdf output_plot/{{i_region}}_plots_NA.pdf
+          re-save-file plot output_plot/{{i_region}}_plots_NA.pdf
+
+        {% else %}
+          mv output_plot/{{t}}_plots.pdf output_plot/{{i_region}}_plots.pdf
+          re-save-file plot output_plot/{{i_region}}_plots.pdf
+
+        {% endif %}
+
+      {% if i_gff %}
+        bamplot -g {{g}} -i {{i_gff}} -b {{b.bam.file}}  -c {{c}} -e {{e}} -s {{s}} -y {{y}} {% if r %}-r{% endif %} {% if n %}-n {{n}}{% endif %} -p {{p}} {% if scale %}-scale {{scale}}{% endif %} {% if bed %}--bed {{bed}}{% endif %} {% if stretch_input %}--stretch-input {{stretch_input}}{% endif %} {% if multi_page %}--multi-page{% endif %} {% if verbose %}--verbose{% endif %} -o output_plot -t {{t}}
+
+        re-checkrc "bamplot failed."
+
+
+        {% if multi_page %}
+          mv output_plot/{{t}}_plots_NA.pdf output_plot/{{i_gff}}_plots_NA.pdf
+          re-save-file plot output_plot/{{i_gff}}_plots_NA.pdf
+
+        {% else %}
+          mv output_plot/{{t}}_plots.pdf output_plot/{{i_gff}}_plots.pdf
+          re-save-file plot output_plot/{{i_gff}}_plots.pdf
+
+        {% endif %}
+
+      {% else %}
+        re-error "Please provide either a gff or a genomic file location only."
+
       {% endif %}
-      {% if not i_gff and i_region %}      
-    run:
-    runtime: polyglot
-    bash: |
-      bamplot -g {{g}} -i {{i_region}} -b {{b.bam.file}}
-      re-checkrc "bamplot failed."
-      re-save-file plot OUTPUT_plots.pdf
-      {% endif %}
-      {% if i_gff and i_region %}
-        re-error "There are two coordinate entries, please provide either a gff or a genomic file location only."
-      {% endif %}
-      
--i {% if i_upload %} {{i_upload.BED.file}}
