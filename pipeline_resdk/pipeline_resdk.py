@@ -163,6 +163,10 @@ class ResCollection(object):
         sample = self._sample_dict[name]['sample']
         return sample.get_bam()
 
+    def getCuffquant(self, name):
+        sample = self._sample_dict[name]['sample']
+        return sample.get_cuffquant()
+
     def download(self, output=''):
         print("Waiting for analysis to finish...")
         while True:
@@ -263,6 +267,61 @@ class ResCollection(object):
 
         return bamplot
 
+    def run_cuffquant(self, sample_name, gff, watch=False):
+        sample = self._sample_dict[sample_name]['sample']
+
+        cuffquant = sample.run_cuffquant(gff)
+
+        if watch:
+            self.to_download.append(cuffquant)
+
+        self._collection.add_data(cuffquant)
+
+        return cuffquant
+
+    def run_cuffnorm(self, sample_names, watch=False):
+
+        replicates = []
+        labels = []
+        cuffquants = []
+
+        dict_replicates = {}
+
+        annotation = None
+
+        for sample_name in sample_names:
+            cuffquant = self.getCuffquant(sample_name)
+            group = self.getGroup(sample_name)
+
+            if annotation is None:
+                annotation = cuffquant.input['gff']
+            elif annotation != cuffquant.input['gff']:
+                raise RuntimeError('Cuffquants objects have different annotations, '
+                    'please select cuffquants with same annotation.')
+
+            if group not in dict_replicates:
+                dict_replicates[group] = str(len(dict_replicates))
+                labels.append(group)
+
+            replicates.append(dict_replicates[group])
+            cuffquants.append(cuffquant)
+
+        inputs = {
+            'cuffquant': cuffquants,
+            'annotation': annotation,
+            'replicates': replicates,
+            'labels': labels,
+        }
+
+        cuffnorm = res.run_cuffnorm(**inputs)
+
+        if watch:
+            self.to_download.append(cuffnorm)
+
+        self._collection.add_data(cuffnorm)
+
+        return cuffnorm
+
 
 def main():
 
@@ -281,36 +340,38 @@ def main():
     # all of the datasets that we have from the k27ac group
     h3k27ac_list = [name for name in res_collection.names() if res_collection.getGroup(name) == 'H3K27AC']
 
+    all_samples = [name for name in res_collection.names()]
+
     #=======================
     #schema for how we want to run, record and get back data for any processor
-    sample_name = h3k27ac_list[0]
-    print(sample_name)
+    #sample_name = h3k27ac_list[0]
+    #print(sample_name)
     #test macs on this and make sure the collection sample dict is appropriately updated
     #this makes sure you can return the macs data id when you run it
     #also want to make sure that the collection gets updated appropriately
-    macs = res_collection.run_macs(sample_name,useBackground=True,p_value='1e-9', watch=True)
-    rose = res_collection.run_rose2(sample_name, useBackground=True, tss=0, stitch=None, macs_params={'p_value': '1e-9'}, watch=True)
-    res_collection.download(output='/grail/genialis/pipeline_resdk')
+    #macs = res_collection.run_macs(sample_name,useBackground=True,p_value='1e-9', watch=True)
+    #rose = res_collection.run_rose2(sample_name, useBackground=True, tss=0, stitch=None, macs_params={'p_value': '1e-9'}, watch=True)
+    #res_collection.download(output='/grail/genialis/pipeline_resdk')
 
     #gff = res.run('upload-gtf', input={'src':'<path/to/gff'})  # upload gff file
     #gff = res.data.get()  # get gff file onece it is uploaded
     #bed = res.run('upload-bed', input={'src':'<path/to/bed>'})
     gff_region = 'chr17:+:41468594-41566948'
-    bamplot = res_collection.run_bamplot(sample_names=h3k27ac_list, input_region=gff_region, watch=True)
-    res_collection.download(output='/grail/genialis/pipeline_resdk')
+    #bamplot = res_collection.run_bamplot(sample_names=h3k27ac_list, input_region=gff_region, watch=True)
+    #res_collection.download(output='/grail/genialis/pipeline_resdk')
 
     # if we would like to use bams that are not part of the res_collection
     #bam = res.run('upload-bam', input='src':'<path/to/bam>')
     #bam1 = res.run('upload-bam', input='src':'<path/to/bam1>')
     #bamplot = res.run_bamplot(bam=[bam.id, bam1.id], genome='',... )
 
-    print(macs.id)
-    print(rose.id)
-    print(res_collection._sample_dict[sample_name])
+    #print(macs.id)
+    #print(rose.id)
+    #print(res_collection._sample_dict[sample_name])
 
     #now we should be able to retrieve the macs output easily by doing
 
-    print(macs.files())
+    #print(macs.files())
 
     #========================
     # #run macs on everybody w/ background at p of 1e-9 and download to a folder
@@ -320,10 +381,19 @@ def main():
     #     #macs_folder = utils.formatFolder('%s%s_MACS14/' % (macs_parent_folder,sample_name),True)
     #     #res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9',output=macs_folder)
     #     res_collection = run_macs14(res_collection,sample_name,useBackground=True,p_value='1e-9')
+    # gtf = res.run('upload-gtf', input={'src':'/grail/genialis/Homo_sapiens.GRCh38.86.gtf.gz', 'source':'NCBI'})  # upload gff file
+    # add hg19 annotation file
+    gtf = res.data.get('hg19gtf-3')
 
     for sample_name in h3k27ac_list:
         res_collection.run_rose2(sample_name, useBackground=True, tss=0, stitch=None, macs_params={'p_value': '1e-9'}, watch=True)
-        res_collection.run_bamplot(sample_names=h3k27ac_list, input_region=gff_region, watch=True, title='h3k27ac_list')
+
+    for sample_name in all_samples:
+        res_collection.run_cuffquant(sample_name, gff=gtf, watch=True)
+
+    res_collection.run_bamplot(sample_names=h3k27ac_list, input_region=gff_region, watch=True, title='h3k27ac_list')
+    res_collection.run_cuffnorm(sample_names=all_samples, watch=True)
+
     res_collection.download(output='/grail/genialis/pipeline_resdk')
 
 
