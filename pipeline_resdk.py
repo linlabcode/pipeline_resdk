@@ -29,6 +29,7 @@ THE SOFTWARE.
 #================================================================================
 
 import os
+import subprocess
 import sys
 import time
 print("using python version %s" % sys.version)
@@ -55,6 +56,15 @@ genome = 'hg19'
 projectFolder = '/grail/projects/chordoma/'
 
 
+# Path to data path on server
+#     torta.bcm.genialis.com -> /grail/genialis/data/
+#     bcm.genialis.com -> /storage/genialis/bcm.genialis.com/data/
+data_folder_path = '/grail/genialis/data/'
+# Address used to connect to server via ssh
+# It can also contains username (i.e. <username>@<hostname>)
+ssh_hostname = 'torta.bcmt.bcm.edu'
+
+
 #================================================================================
 #===========================DEFINING THE CLASSES=================================
 #================================================================================
@@ -72,6 +82,9 @@ class ResCollection(object):
 
     #: list of processing objects that need to be downloaded
     to_download = []
+
+    #: ssh connection to the server
+    ssh_connection = None
 
     # this __init__section is called from the get go
     def __init__(self, collection_slug, genome, relationship_file=None):
@@ -189,6 +202,57 @@ class ResCollection(object):
                 break
 
             time.sleep(1)
+
+    def _create_local_link(self, src, dest):
+        dest_dir = os.path.dirname(dest)
+        if not os.path.isdir(dest_dir):
+            os.makedirs(dest_dir)
+
+        if os.path.isfile(dest):
+            os.remove(dest)
+
+        os.symlink(src, dest)
+
+    def _create_ssh_link(self, src, dest):
+        if self.ssh_connection is None:
+            self.ssh_connection = subprocess.Popen(
+                ['ssh', '-tt', ssh_hostname],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                universal_newlines=True,
+                bufsize=0
+            )
+
+        dest_dir = os.path.dirname(dest)
+
+        self.ssh_connection.stdin.write('mkdir -p "{}"\n'.format(dest_dir))
+        self.ssh_connection.stdin.write('ln -sf "{}" "{}"\n'.format(src, dest))
+
+    def create_links(self, links=[], path='resdk_results'):
+        print('Linking results...')
+        for link in links:
+            for data in self._collection.data.filter(status='OK', type=link['type']):
+                for file_name in data.files(field_name=link['field']):
+                    file_path = os.path.join(data_folder_path, str(data.id), file_name)
+
+                    link_name = '{:05}_{}_{}'.format(
+                        data.id,
+                        data.sample.slug if data.sample else data.slug,
+                        genome
+                    )
+                    if '.' in file_name:
+                        link_extension = file_name.split('.', 1)[1]
+                        link_name = '{}.{}'.format(link_name, link_extension)
+
+                    link_path = os.path.join(path, link['subfolder'], link_name)
+
+                    if os.path.isfile(file_path):
+                        self._create_local_link(file_path, link_path)
+                    else:
+                        self._create_ssh_link(file_path, link_path)
+
+        if self.ssh_connection is not None:
+            self.ssh_connection.stdin.close()
 
     def run_macs(self, sample_name, useBackground=True, p_value='1e-9', watch=False):
         sample = self._sample_dict[sample_name]['sample']
@@ -394,8 +458,20 @@ def main():
     res_collection.run_bamplot(sample_names=h3k27ac_list, input_region=gff_region, watch=True, title='h3k27ac_list')
     res_collection.run_cuffnorm(sample_names=all_samples, watch=True)
 
-    res_collection.download(output='/grail/genialis/pipeline_resdk')
+    # Wait for analysis, runed with `watch=True`, to finish and download
+    # their results.
+    # res_collection.download(output='/grail/genialis/pipeline_resdk')
 
+    # Links can only be created when analysis is finished. So you have
+    # to wait before running this step or run the script one more time
+    # when all analysis are finished.
+    res_collection.create_links([
+        {'type': 'data:alignment:bam:bowtie2:', 'field': 'bam', 'subfolder': 'bams'},
+        {'type': 'data:alignment:bam:bowtie2:', 'field': 'bai', 'subfolder': 'bams'},
+        {'type': 'data:chipseq:macs14:', 'field': 'peaks_bed', 'subfolder': 'macs'},
+        {'type': 'data:chipseq:macs14:', 'field': 'peaks_xls', 'subfolder': 'macs'},
+        {'type': 'data:chipseq:rose2:', 'field': 'all_enhancers', 'subfolder': 'roses'},
+    ])
 
     #retrieve an arbitrary macs output
     #macs_list = res_collection.get;acs(sample_name)
